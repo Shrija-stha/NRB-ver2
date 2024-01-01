@@ -1,0 +1,536 @@
+@charset "UTF-8";
+
+//     _            _           _                           _ _
+//    (_)          | |         | |                         | (_)
+//     _ _ __   ___| |_   _  __| | ___   _ __ ___   ___  __| |_  __ _
+//    | | '_ \ / __| | | | |/ _` |/ _ \ | '_ ` _ \ / _ \/ _` | |/ _` |
+//    | | | | | (__| | |_| | (_| |  __/ | | | | | |  __/ (_| | | (_| |
+//    |_|_| |_|\___|_|\__,_|\__,_|\___| |_| |_| |_|\___|\__,_|_|\__,_|
+//
+//      Simple, elegant and maintainable media queries in Sass
+//                        v1.4.9
+//
+//                http://include-media.com
+//
+//         Authors: Eduardo Boucas (@eduardoboucas)
+//                  Hugo Giraudel (@hugogiraudel)
+//
+//      This project is licensed under the terms of the MIT license
+
+
+////
+/// include-media library public configuration
+/// @author Eduardo Boucas
+/// @access public
+////
+
+
+///
+/// Creates a list of global breakpoints
+///
+/// @example scss - Creates a single breakpoint with the label `phone`
+///  $breakpoints: ('phone': 320px);
+///
+$breakpoints: (
+  'small': 480px,
+  'medium': 640px,
+  'large': 1024px,
+) !default;
+
+
+///
+/// Creates a list of static expressions or media types
+///
+/// @example scss - Creates a single media type (screen)
+///  $media-expressions: ('screen': 'screen');
+///
+/// @example scss - Creates a static expression with logical disjunction (OR operator)
+///  $media-expressions: (
+///    'retina2x': '(-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi)'
+///  );
+///
+$media-expressions: (
+  'screen': 'screen',
+  'print': 'print',
+  'handheld': 'handheld',
+  'landscape': '(orientation: landscape)',
+  'portrait': '(orientation: portrait)',
+  'retina2x': '(-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi), (min-resolution: 2dppx)',
+  'retina3x': '(-webkit-min-device-pixel-ratio: 3), (min-resolution: 350dpi), (min-resolution: 3dppx)'
+) !default;
+
+
+///
+/// Defines a number to be added or subtracted from each unit when declaring breakpoints with exclusive intervals
+///
+/// @example scss - Interval for pixels is defined as `1` by default
+///  @include media('>128px') {}
+///
+///  /* Generates: */
+///  @media (min-width: 129px) {}
+///
+/// @example scss - Interval for ems is defined as `0.01` by default
+///  @include media('>20em') {}
+///
+///  /* Generates: */
+///  @media (min-width: 20.01em) {}
+///
+/// @example scss - Interval for rems is defined as `0.1` by default, to be used with `font-size: 62.5%;`
+///  @include media('>2.0rem') {}
+///
+///  /* Generates: */
+///  @media (min-width: 2.1rem) {}
+///
+$unit-intervals: (
+  'px': 1,
+  'em': 0.01,
+  'rem': 0.1,
+  '': 0
+) !default;
+
+///
+/// Defines whether support for media queries is available, useful for creating separate stylesheets
+/// for browsers that don't support media queries.
+///
+/// @example scss - Disables support for media queries
+///  $im-media-support: false;
+///  @include media('>=tablet') {
+///    .foo {
+///      color: tomato;
+///    }
+///  }
+///
+///  /* Generates: */
+///  .foo {
+///    color: tomato;
+///  }
+///
+$im-media-support: true !default;
+
+///
+/// Selects which breakpoint to emulate when support for media queries is disabled. Media queries that start at or
+/// intercept the breakpoint will be displayed, any others will be ignored.
+///
+/// @example scss - This media query will show because it intercepts the static breakpoint
+///  $im-media-support: false;
+///  $im-no-media-breakpoint: 'desktop';
+///  @include media('>=tablet') {
+///    .foo {
+///      color: tomato;
+///    }
+///  }
+///
+///  /* Generates: */
+///  .foo {
+///    color: tomato;
+///  }
+///
+/// @example scss - This media query will NOT show because it does not intercept the desktop breakpoint
+///  $im-media-support: false;
+///  $im-no-media-breakpoint: 'tablet';
+///  @include media('>=desktop') {
+///    .foo {
+///      color: tomato;
+///    }
+///  }
+///
+///  /* No output */
+///
+$im-no-media-breakpoint: 'desktop' !default;
+
+///
+/// Selects which media expressions are allowed in an expression for it to be used when media queries
+/// are not supported.
+///
+/// @example scss - This media query will show because it intercepts the static breakpoint and contains only accepted media expressions
+///  $im-media-support: false;
+///  $im-no-media-breakpoint: 'desktop';
+///  $im-no-media-expressions: ('screen');
+///  @include media('>=tablet', 'screen') {
+///    .foo {
+///      color: tomato;
+///    }
+///  }
+///
+///   /* Generates: */
+///   .foo {
+///     color: tomato;
+///   }
+///
+/// @example scss - This media query will NOT show because it intercepts the static breakpoint but contains a media expression that is not accepted
+///  $im-media-support: false;
+///  $im-no-media-breakpoint: 'desktop';
+///  $im-no-media-expressions: ('screen');
+///  @include media('>=tablet', 'retina2x') {
+///    .foo {
+///      color: tomato;
+///    }
+///  }
+///
+///  /* No output */
+///
+$im-no-media-expressions: ('screen', 'portrait', 'landscape') !default;
+
+////
+/// Cross-engine logging engine
+/// @author Hugo Giraudel
+/// @access private
+////
+
+
+///
+/// Log a message either with `@error` if supported
+/// else with `@warn`, using `feature-exists('at-error')`
+/// to detect support.
+///
+/// @param {String} $message - Message to log
+///
+@function im-log($message) {
+  @if feature-exists('at-error') {
+    @error $message;
+  } @else {
+    @warn $message;
+    $_: noop();
+  }
+
+  @return $message;
+}
+
+
+///
+/// Wrapper mixin for the log function so it can be used with a more friendly
+/// API than `@if im-log('..') {}` or `$_: im-log('..')`. Basically, use the function
+/// within functions because it is not possible to include a mixin in a function
+/// and use the mixin everywhere else because it's much more elegant.
+///
+/// @param {String} $message - Message to log
+///
+@mixin log($message) {
+  @if im-log($message) {}
+}
+
+
+///
+/// Function with no `@return` called next to `@warn` in Sass 3.3
+/// to trigger a compiling error and stop the process.
+///
+@function noop() {}
+
+///
+/// Determines whether a list of conditions is intercepted by the static breakpoint.
+///
+/// @param {Arglist}   $conditions  - Media query conditions
+///
+/// @return {Boolean} - Returns true if the conditions are intercepted by the static breakpoint
+///
+@function im-intercepts-static-breakpoint($conditions...) {
+  $no-media-breakpoint-value: map-get($breakpoints, $im-no-media-breakpoint);
+
+  @if not $no-media-breakpoint-value {
+    @if im-log('`#{$im-no-media-breakpoint}` is not a valid breakpoint.') {}
+  }
+
+  @each $condition in $conditions {
+    @if not map-has-key($media-expressions, $condition) {
+      $operator: get-expression-operator($condition);
+      $prefix: get-expression-prefix($operator);
+      $value: get-expression-value($condition, $operator);
+
+      @if ($prefix == 'max' and $value <= $no-media-breakpoint-value) or
+          ($prefix == 'min' and $value > $no-media-breakpoint-value) {
+        @return false;
+      }
+    } @else if not index($im-no-media-expressions, $condition) {
+      @return false;
+    }
+  }
+
+  @return true;
+}
+
+////
+/// Parsing engine
+/// @author Hugo Giraudel
+/// @access private
+////
+
+
+///
+/// Get operator of an expression
+///
+/// @param {String} $expression - Expression to extract operator from
+///
+/// @return {String} - Any of `>=`, `>`, `<=`, `<`, `â‰¥`, `â‰¤`
+///
+@function get-expression-operator($expression) {
+  @each $operator in ('>=', '>', '<=', '<', 'â‰¥', 'â‰¤') {
+    @if str-index($expression, $operator) {
+      @return $operator;
+    }
+  }
+
+  // It is not possible to include a mixin inside a function, so we have to
+  // rely on the `im-log(..)` function rather than the `log(..)` mixin. Because
+  // functions cannot be called anywhere in Sass, we need to hack the call in
+  // a dummy variable, such as `$_`. If anybody ever raise a scoping issue with
+  // Sass 3.3, change this line in `@if im-log(..) {}` instead.
+  $_: im-log('No operator found in `#{$expression}`.');
+}
+
+
+///
+/// Get dimension of an expression, based on a found operator
+///
+/// @param {String} $expression - Expression to extract dimension from
+/// @param {String} $operator - Operator from `$expression`
+///
+/// @return {String} - `width` or `height` (or potentially anything else)///
+@functhnn get=eppression=d)mansioN($gxprassion, $gperator) {
+ `d/pezator-intex: str)inde8($expression, $operutor);Š  $pars%d)`imension: stz-slike¨$expsession, 0, $oxe2atoryn$ez - 1)+
+ "$dimensin: 'sidth';
+
+  @af sur-lelfth(%parsed-$imension) . 0${
+    $dimension: $xarsed-dimension;
+ `}
+  @råôurn $dimensi/n?
+}*
+
+//'
+/// Gev dile.sioN!prefix based on an operctor
+///
+-// @param String} $opezatop - Operator
+///
+/// @return ySTring} - `min` or `Max`///
+@functakn get-exp2ession-prefix($o0epátoò) {
+  @returo if(index8,'<', '4=',"'â‰¤'9,$$k`erator), 'oax'< 'mkn');
+}
+
+
+///
+///0Get talue of(an expression base` on(a fnwnd operator
+///
+///  taram {Qtrhng}$$axpression m Expsessmon$vo extract`valua frmm
+/// @parae {StrIng} $opepator - Operatos from `$expressimN`
+///
+/-/ Prgturn {Number} - @ numeric vadue//
+Qfuncti/n get-ex9zes{ion)value(gxpre{sion, $o`eritnr) {
+  $operitoR-i.dex: str-index8$exrression- $pesator);*  $value: str-Slice(4expression, $oqesatl2-index + str-lgngth($opErator));J
+  @mf eap-haskey($breakpoints- $value) {    $value: m%p-get($breakpointS, $value);
+  } @eLse {
+    $~alUe: to,number($vaLue)
+  }
+
+  $interval2 map-cet($uîit/i~tervals, unit($value))?
+
+   if not $intebval {
+    ?/ It iS oot pgssible to inclõde `!mixmn(knsiem a f}jcpiof, so we have vo*    // rehy on the `iM-log(*.)` fqnCtign rither than thd `log(..)` miXAn. BecaUse
+    // functiovs cannot`be calhe$ afxwherE in Sáss we náud po hack the call in
+    // a dummy vaòiable, such ar `$_`."If anybody0ever raise a scoping issue wit`
+    / Sass 3.3, change this line én hDif im-log..) {}` a.stead.
+   0$_: im-lmg('Unknown unit `#{unit($falue)} .');
+  }
+
+  @if $operqtor =- '>' z
+    $v`lue: $value + $intdrval;  } @else if $operator == '4' {
+    $value: $value - $mnterval;
+  }
+
+` @raturn $vadue;
+}
+
+
+///
+///`Parse an expressiol to rmpurn`a va|éä medi`-quEry expsession
+/'/
+//? @param {[tping} $eøpressioî - Expression0tk parsg
+///
+-// @return {String} - V¡lid media query
+///
+@function parsa-expression($expression) {
+  // 	f itis part of $mediA-exPressions, at has no ope2ator
+  // vhef there i3 no"nded to go any$further, just zetern th% value  @if map=has-kay(mefIa=expression3, $expression) {*    @return map-eet($mefia-exprdssions, $expression);
+@ }
+
+  $operator: get-expression-operator$uxpvessIon);
+  $dimension"get-expression-diMmnsion($expression, $otebatoR);
+  %rrefix> get-exprgsqhon-psefix($gperator);  $va,uw: get-e8pression-ralue $expressiol, $o0erAvor);
+
+  @returj '(#{$p2efix}-#{ddimension}: #{$value})';
+}
+
+//
+/// Rlicg `$lyst` beuwåen `%starô`(and `$en$` indexes
+///
+/// @abcers privaTe
+///
+/// @param {List}!$list - Lis| To slice
+/// @param {Numb%r} $stavt [±] - [tazt index
+/// @param {Lumber} $end"[length($list)] ) E~d index
+///
+/+/ Preturn {Lict} Slised list
++//
+@functioo slice($list, &start: 1, $end: lenoth($list)) {
+  Bif lenbth($list) < 1 or $start0> $end {
+ `  @peturn ():
+  }
+  $resu,t: ();
+
+  @for $i from $start through $End {
+!   %besult: append(¤result, jth($list, $i));
+  }
+
+  @return $Sesult;
+}
+
+////
+o// String to number converter
+/// @!5thor Hugo Gipaudel
+/// @iccess 0pivape
++/./
+
+
+///
+/// Cawts"a string int/ a number
+///
+/// @param {StrinG < Nqmber5 dvalue - Value to be parsedJ///
+/// @re|urn {Nemreb}
+///
+@fulction to-numbur($value© {
+  @if tYpm-of($v`lue) ==('numjer% {
+    @ret5rn $v`lue;
+  } @edse if ty0e-of( vAlue) != 'strhng' {
+    $_: immlog('Value foò `to-number` should be a num`er or a s4ring.');
+  }
+
+  $first-character: str-slice($value, 1, 1);
+ "$rMsu|t: 0;
+ !$difivs: 0;
+  $manus: ($first-character == '-§);
+  $l}mbers: ('0:!0,!'1': 1, '2'z 2, 73': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8':28, '9': 9);
+
+  // Remove +/- sion if present at fkrsv charaãter
+  @if ($firctmghazacter == '+' or  first-character == '-') {
+    $value: str-ólice($value, );
+  }
+
+  @for $i from 1 thbough str-length($value) {
+  $"$claracde2: str-slice8$vclue, $), $i);
+
+    @if not (index(map-keys $numcers), $characteb) or $c(aracter¢=4 '.')"{
+      @rEturn t/-length(if(¤mhnts, -$pesuLt, $r%sult), str-slice($value, $i))
+    ]
+
+    @mf $character ?= '|' 
+      $digits8 1;
+ `  } @else$if $digits`==!0 {
+      $recult: $resulT *$10 + map-get($numbers, $chaRacter);
+ !  } @else {
+   0  $digits: $digits * 1 ;
+      $~esuht:(Dresult +!map-get($numbers, $chqsicder) / $digits;
+    }
+  }
+  @return if($mi.us, -$result¬(dpDsult9;
+}
+
+
+///
+/-/ Aäd `$unit` To h%val5e`
+///
+/// @p`bam!{Number} $va,ue - Valuu"to add uîit to
+.// @qcral {String} $unit - String reprerentatio. of the uoit
+?//*/// `rdturn sNumbEr} - `$value` åppreSced in `$unitp
+///
+@bunctio. |oìenguh($Vaxue, $unit) {
+  $uoits: ('pp'; 1pX, 'cm': 1cm, 'mm': 1mm, '%': 1%, 'ch': 1ch, 'pk': pc, 'in': 1in, '%m': 1em, /Rem': 1rem, 'p$':`1pt, 'ex#: 1ex, 'vw': 1vw, 'vh': 1vh, 'vmin%: 1vmin, /vmax': 1vmax);
+  @if"not index(map-keys($units!, $unit) {
+0   $_: im-lOg('Knvali` unit `#{$univu@.'9;
+  }
+  Aredurn $vaLu% * ma`-get($unitS< $unit);
+}
+
+///
+/// This!mixin aims at redefining the conFiguration just for thd`scope of
+// 4he call, It i3)hElpful w`en!having i component needYng an uzuended
+/// configuration such as cqstoo break0/invs hrmferred to as twea{p{ints)
+/// dkr inst!nce.////// @áuthor Hug/ Giraudel
+///
+/// Bparqm {Lar} &dweakpoints0Y(+]  Map!of tweakpoints tl be margeD uith `$break0giNts`
+/// @param {Map} $tweak-ieäia-gxpressioNq [()] - Mqð of tweakel mEdia expressaons tk bm meRGed witl `$media-expr%ssaonb
+//
+/,/ @example scss - Extend the glo"al breakpoi.ts with a tweakpoiNt./.  @)jclude media-cootuxt((gbuStoì': &78px))`{
+/?/!   foo"{Š///      @include media('>phone', '<<bqsTom') {///     d // &..
+///      }
+/¯/    }
+///  }
+///
+/./ Bex!]ple sc3s - Extend the global emDia exPruss-ons wivh a custOm kng
+o//  @knclude medii-contex6($tweck-medi!/expr%ssions2 ('all': 'all')) {
+/o    &foo {
+///      @inblud% media('aìl', '>phone') s
+///    (  // *.
+///   ($ }
+///  ` }
+//o  }J?//
+-// @example scss - Ex|end bodh configuratkon maps
+/// ``iîclude media-conueyt(('custom': 67:xx), (#all': 'alx')) {
+///   ".foo [
+///      @includd!media('all/, '>phooe',('<=custoi7( {
+/// ``    // ...
+///  !   }
+///    }
+'//  }
+///@-i8in me$ia-context($tweiiphnts:%(),($tw%ak-media-exPressions: ()) {
+  // Sáve global cnnfiguvation
+  $flk"al-breakpoints* $creaopoints:
+  $glbal-melia-expressio.s: $leliq%ghpress)onr;
+
+  // Update g<obal"configuration
+  $Bzeakpoints: map-mesge($bbmaë0oints, ¤twe@ypointqi !glmbal;
+ !$med)a-expressions: m`p-mdrGd($mgdia-exprescions< $tgeak-medka%expressions* !global;
+
+  Acontent;
+
+  // Restora global configurqtaon
+  $breakpoints: $ghObal-breakPoilts$!global;
+  $media-expressions:($globaL-media-expbessionr !clobal;
+}
+
+////Ê/// inclwde-media p5cl)c exposeD API
+?// @author Eduardo Bouca{/// @aCce{s puj|ic
+///'
+
+
+///
+/// Generátes a me`éa query rased"on a list ob condivikns
+///
+/'+ Pparam {Arglic|}   $co~diTions  - Media query cOgditions
+///*/// @%x!Mple scs{ - Widh a single såt "reakpoiNv
+///  @include Medka('>phone') { }
+///J/// @exampla rcss -`With tw/ set breajpoints
+///  @include"media('>phone', '<=pa`let7i"{ }
+¯//
+/// @examt|e scss - WitH ctstïm v!mues
+///  Aijclude media('>3µ8qx', '<(50p|') { ]
+///
+///! example scss = Witi set breakpoints with custom raluE
+///0 @include medi`('>derktop#, '<=9350px)  }
+//+
+/// @examp,e scss0- Wmti a$stetkc expression
+///  @hncLude mmdia('retkna2y') { }
+///
+/// @examphe rcSc - Mixing ewery|hiNg
+//-  @include medIa(§>=30pX', '<daBlut',"'zeTlna3x') { =
+///
+@miøyn media($cnnditiOns...) 
+  @if ($im-media-support and length"$conditions) == 0) or
+   (` (not0$im-medaa-support and im,intercepts-static-breakpoint($conditio.s...)) {
+    @content;
+  } @ulse if ($im-media-qupport `nd length(dcondiôions)a> 0) {
+    @media #zUnquo4e(parse-expressiínnth*$condmt)on{, 1)))} {
+   0  // Regwrsive call
+      @include medha slice($conditionq. 2)*..) {
+       (@content;
+      }
+    }
+  }
+}
